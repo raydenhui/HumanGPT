@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.env
+*.db
+*.sqlite
+*.sqlite3
+data/
+.DS_Store
+
+# React SPA build artifacts (the built dist IS committed for serving; only
+# node_modules is ignored)
+ui/node_modules/
+.humangpt-ui-build/

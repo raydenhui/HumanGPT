@@ -1,0 +1,10 @@
+{
+  "models": [
+    {
+      "id": "human-gpt",
+      "object": "model",
+      "created": 1715367049,
+      "owned_by": "humangpt"
+    }
+  ]
+}
