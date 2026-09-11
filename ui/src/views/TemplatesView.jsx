@@ -51,7 +51,7 @@ export function TemplatesView({ refreshToken }) {
   return (
     <section className="max-w-3xl mx-auto space-y-5">
       <h1 className="text-2xl font-bold mb-1">Canned responses</h1>
-      <p className="text-dim text-sm">Reusable assistant replies for deterministic regression tests. Insert them into an answer on the Queue page (unlocked draft), then edit before submitting.</p>
+      <p className="text-dim text-sm">Canned assistant replies. Save them here and insert them into an answer on the Queue page.</p>
 
       {flash && (
         <div className={`rounded-lg p-3 border ${flash.kind === "ok" ? "border-emerald-500 bg-emerald-500/10 text-emerald-400" : "border-rose-500 bg-rose-500/10 text-rose-400"}`}>

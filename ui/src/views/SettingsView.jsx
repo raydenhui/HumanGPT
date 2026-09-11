@@ -23,7 +23,6 @@ export function SettingsView({ refreshToken }) {
         setInitialized(true);
       }
     }).catch((e) => setFlash({ kind: "err", msg: String(e) }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshToken]);
 
   function flashMsg(msg) {
@@ -89,7 +88,7 @@ export function SettingsView({ refreshToken }) {
       {/* API base URL */}
       <div className="panel">
         <h3 className="text-[15px] font-semibold mb-1.5">API base URL</h3>
-        <p className="text-dim text-[13px] mb-2">Point your OpenAI SDK at this server:</p>
+        <p className="text-dim text-[13px] mb-2">Set this as your SDK <code className="text-[12px]">base_url</code>.</p>
         <div className="flex items-center gap-2.5">
           <code className="flex-1 bg-panel2 border border-line rounded-lg px-3 py-2 text-[14px] user-select-all">
             {(data && data.api_base_url) || "…"}
@@ -123,8 +122,8 @@ export function SettingsView({ refreshToken }) {
       <div className="panel">
         <h3 className="text-[15px] font-semibold mb-1.5">Model list</h3>
         <p className="text-dim text-[13px] mb-2">
-          Base identities come from <code className="text-[12px]">models.json</code>. Add a new model or edit
-          description / pricing — changes persist and are served by <code className="text-[12px]">/v1/models</code>.
+          Model IDs come from <code className="text-[12px]">models.json</code>. Description and pricing set here are
+          stored in the database and served by <code className="text-[12px]">/v1/models</code>.
         </p>
 
         <details className="mb-3">

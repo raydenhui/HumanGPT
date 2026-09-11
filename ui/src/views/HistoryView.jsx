@@ -59,8 +59,8 @@ export function HistoryView({ refreshToken }) {
           <Transcript {...selected} />
         ) : (
           <div className="panel flex flex-col items-center justify-center py-16 text-dim">
-            <p className="text-lg text-ink/80 font-semibold">Transcript</p>
-            <p className="mt-2 max-w-md mx-auto text-center">Select a request on the left to audit its full transcript: request JSON, the human's response envelope, finish_reason, usage, and who answered.</p>
+            <p className="text-lg text-ink/80 font-semibold">No request selected</p>
+            <p className="mt-2">Select a request from the list to view its transcript.</p>
           </div>
         )}
       </section>

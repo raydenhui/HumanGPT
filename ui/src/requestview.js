@@ -47,3 +47,17 @@ export function normalizeDetail(detail) {
     tools: normalizeTools(body.tools),
   };
 }
+
+/** Whether a request can still be answered (only pending requests can). */
+export function isAnswerable(req) {
+  return Boolean(req) && req.state === "pending";
+}
+
+/**
+ * Whether the live word-chunk answer form applies. Only *streaming* requests
+ * whose effective stream mode is word-chunk use it; non-streaming requests and
+ * once-mode use the plain submit form.
+ */
+export function usesLiveWordChunk(req, streamMode) {
+  return Boolean(req && req.stream) && streamMode === "word-chunk";
+}

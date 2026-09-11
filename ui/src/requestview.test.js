@@ -3,10 +3,12 @@
 
 import {
   asArray,
+  isAnswerable,
   normalizeChatMessages,
   normalizeDetail,
   normalizeResponsesInput,
   normalizeTools,
+  usesLiveWordChunk,
 } from "./requestview.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -72,4 +74,23 @@ test("normalizeDetail is null-safe", () => {
   assert.deepEqual(n.chatMessages, []);
   assert.deepEqual(n.tools, []);
   assert.equal(n.streamMode, "word-chunk");
+});
+
+test("isAnswerable only true for pending", () => {
+  assert.equal(isAnswerable({ state: "pending" }), true);
+  assert.equal(isAnswerable({ state: "streamed" }), false);
+  assert.equal(isAnswerable({ state: "answered" }), false);
+  assert.equal(isAnswerable({ state: "timed_out" }), false);
+  assert.equal(isAnswerable(null), false);
+});
+
+test("usesLiveWordChunk requires a streaming request AND word-chunk mode", () => {
+  // non-streaming request must NOT use the live form (the example-3 bug)
+  assert.equal(usesLiveWordChunk({ stream: false }, "word-chunk"), false);
+  assert.equal(usesLiveWordChunk({ stream: false }, "once"), false);
+  // streaming + word-chunk -> live
+  assert.equal(usesLiveWordChunk({ stream: true }, "word-chunk"), true);
+  // streaming + once -> plain form
+  assert.equal(usesLiveWordChunk({ stream: true }, "once"), false);
+  assert.equal(usesLiveWordChunk(null, "word-chunk"), false);
 });

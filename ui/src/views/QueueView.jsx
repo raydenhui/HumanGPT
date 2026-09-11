@@ -87,14 +87,12 @@ export function QueueView({ refreshToken }) {
       return;
     }
     fetchDetail(selectedId, { claim: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
   // Background refreshes must NOT drop the open selection; just refresh the
   // detail in place (without re-claiming).
   useEffect(() => {
     if (selectedId) fetchDetail(selectedId, { claim: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshToken]);
 
   return (
@@ -105,7 +103,7 @@ export function QueueView({ refreshToken }) {
           Queue <span className="text-dim text-[13px]">({queue.length})</span>
         </h2>
         {queue.length === 0 ? (
-          <p className="text-dim text-sm py-6 text-center">Queue is empty — the human has answered everything.</p>
+          <p className="text-dim text-sm py-6 text-center">Queue is empty.</p>
         ) : (
           <ul className="space-y-1.5">
             {queue.map((r) => (
@@ -154,11 +152,8 @@ export function QueueView({ refreshToken }) {
           />
         ) : (
           <div className="bg-panel border border-line rounded-xl p-12 text-center text-dim">
-            <p className="text-lg font-semibold text-ink/80 mt-2">Operator queue</p>
-            <p className="mt-2 max-w-md mx-auto">
-              Select a pending request on the left to answer it. The request stays in this
-              pane — no switching between pages.
-            </p>
+            <p className="text-lg font-semibold text-ink/80 mt-2">No request selected</p>
+            <p className="mt-2">Select a pending request from the list.</p>
           </div>
         )}
       </section>

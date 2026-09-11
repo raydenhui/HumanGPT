@@ -184,6 +184,35 @@ async def test_streaming_partial_push_reconciles_remainder(client, state):
     assert reconstructed == "1 2 3 4 5"
 
 
+async def test_non_streaming_state_is_answered(client, state):
+    """Non-streaming answers must land in `answered` (not `streamed`)."""
+    task = await parked_post(client, "/v1/chat/completions", {**CHAT_BODY, "stream": False})
+    row = await find_pending_row(state)
+    await answer_via_web(client, row.id, text="plain", stream_mode="word-chunk")
+    await task
+    assert state.db.get_request(row.id).state == "answered"
+
+
+async def test_streaming_state_is_streamed(client, state):
+    """Streaming answers must land in `streamed`."""
+    task = await parked_post(client, "/v1/chat/completions", {**CHAT_BODY, "stream": True})
+    row = await find_pending_row(state)
+    await answer_via_web(client, row.id, text="live", stream_mode="word-chunk")
+    await task
+    assert state.db.get_request(row.id).state == "streamed"
+
+
+async def test_non_streaming_repeat_submit_rejected(client, state):
+    """After a non-streaming answer, a repeat submit is a 409 (not pending)."""
+    task = await parked_post(client, "/v1/chat/completions", {**CHAT_BODY, "stream": False})
+    row = await find_pending_row(state)
+    first = await answer_via_web(client, row.id, text="first")
+    assert first.status_code == 200
+    second = await answer_via_web(client, row.id, text="second")
+    assert second.status_code == 409
+    await task
+
+
 async def test_streaming_tool_call(client, state):
     body = {
         **CHAT_BODY,

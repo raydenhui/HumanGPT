@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import { api, operatorName } from "../api.js";
 import { lockOneWord } from "../wordlock.js";
-import { normalizeDetail } from "../requestview.js";
+import { normalizeDetail, isAnswerable, usesLiveWordChunk } from "../requestview.js";
 
 function Part(part) {
   if (!part || typeof part !== "object") return null;
@@ -71,6 +71,15 @@ export function RequestDetail({ detail, onChanged }) {
   const req = detail.request;
   const { body, parsed, templates, streamMode, inputItems, chatMessages, tools } = normalizeDetail(detail);
 
+  // A request is only answerable while pending. Once answered/streamed/etc.
+  // the form is replaced by the delivered response (prevents repeat submits,
+  // which the server rejects with `request_not_pending`).
+  const isPending = isAnswerable(req);
+  // The live word-chunk form only makes sense for a *streaming* request whose
+  // effective mode is word-chunk. Non-streaming requests use the plain form
+  // (also used for tool-call answers).
+  const live = usesLiveWordChunk(req, streamMode);
+
   const [flash, setFlash] = useState(null);
   const [locked, setLocked] = useState([]); // deltas already streamed
   const [tail, setTail] = useState("");
@@ -78,6 +87,7 @@ export function RequestDetail({ detail, onChanged }) {
   const [toolName, setToolName] = useState("");
   const [toolArgs, setToolArgs] = useState("");
   const [busy, setBusy] = useState(false);
+  const submittingRef = useRef(false);
 
   const lockedText = locked.join("");
 
@@ -111,7 +121,14 @@ export function RequestDetail({ detail, onChanged }) {
   }
 
   function finish() {
-    if (busy) return;
+    // Ref guard closes the double-click window before React re-renders `busy`.
+    if (submittingRef.current || busy) return;
+    if (!isPending) {
+      setFlash({ kind: "err", msg: "This request is no longer pending." });
+      onChanged();
+      return;
+    }
+    submittingRef.current = true;
     setBusy(true);
     // Snapshot the full text BEFORE side effects so the submitted envelope
     // (usage/content) exactly matches what the client received as deltas.
@@ -120,7 +137,7 @@ export function RequestDetail({ detail, onChanged }) {
     const cleanedTail = tail.replace(/\s+$/, "");
     const fullText = lockedText + cleanedTail;
     // Stream the remaining (cleaned) tail as the final delta.
-    if (cleanedTail !== "") {
+    if (live && cleanedTail !== "") {
       pushDelta(cleanedTail);
       setTail("");
     }
@@ -134,13 +151,20 @@ export function RequestDetail({ detail, onChanged }) {
         operator: operatorName(),
       })
       .then(() => {
-        setFlash({ kind: "ok", msg: "Answer submitted — the parked client request was released." });
+        setFlash({ kind: "ok", msg: "Answer submitted." });
         onChanged();
         setTimeout(() => setFlash(null), 4000);
       })
       .catch((e) => {
-        setFlash({ kind: "err", msg: String(e) });
+        const msg = String(e && e.message ? e.message : e);
+        setFlash({ kind: "err", msg });
+        submittingRef.current = false;
         setBusy(false);
+        // If another submit won the race (or it was answered elsewhere),
+        // refresh so the UI shows the delivered response instead of the form.
+        if (/not pending|already answered/i.test(msg)) {
+          onChanged();
+        }
       });
   }
 
@@ -225,74 +249,65 @@ export function RequestDetail({ detail, onChanged }) {
         </details>
       </Panel>
 
-      {/* answer form */}
-      <AnswerForm
-        streamMode={streamMode}
-        locked={lockedText}
-        tail={tail}
-        toolCall={toolCall}
-        toolName={toolName}
-        toolArgs={toolArgs}
-        busy={busy}
-        templates={templates}
-        onTail={handleTailChange}
-        onSendWord={sendWordNow}
-        onFinish={finish}
-        onToolCall={setToolCall}
-        onToolName={setToolName}
-        onToolArgs={setToolArgs}
-        onInsert={insertTemplate}
-      />
+      {/* answer form (only while pending) or the delivered response */}
+      {isPending ? (
+        <AnswerForm
+          live={live}
+          requestStream={Boolean(req.stream)}
+          streamMode={streamMode}
+          locked={lockedText}
+          tail={tail}
+          toolCall={toolCall}
+          toolName={toolName}
+          toolArgs={toolArgs}
+          busy={busy}
+          templates={templates}
+          onTail={handleTailChange}
+          onSendWord={sendWordNow}
+          onFinish={finish}
+          onToolCall={setToolCall}
+          onToolName={setToolName}
+          onToolArgs={setToolArgs}
+          onInsert={insertTemplate}
+        />
+      ) : (
+        <DeliveredResponse detail={detail} req={req} />
+      )}
 
       {/* actions */}
       <Panel>
         <SectionTitle>Actions</SectionTitle>
         <div className="flex gap-3">
-          <button className="btn" onClick={() => action("returnToPending", "Return to pending? The client will keep waiting.")}>↺ Return to pending</button>
-          <button className="btn" onClick={() => action("timeout", "Mark as timed out? The parked client will receive a 504.")}>⏱ Mark timed out</button>
-          <button className="btn danger" onClick={() => action("discard", "Discard? The parked client gets an error; the row is kept for audit.")}>✕ Discard</button>
+          <button className="btn" onClick={() => action("returnToPending", "Return this request to pending?")}>↺ Return to pending</button>
+          <button className="btn" onClick={() => action("timeout", "Mark as timed out? The client receives a 504.")}>⏱ Mark timed out</button>
+          <button className="btn danger" onClick={() => action("discard", "Discard this request? The client receives an error. The row is kept.")}>✕ Discard</button>
         </div>
       </Panel>
     </div>
   );
 }
 
-function AnswerForm({ streamMode, locked, tail, toolCall, toolName, toolArgs, busy, templates, onTail, onSendWord, onFinish, onToolCall, onToolName, onToolArgs, onInsert }) {
+function AnswerForm({ live, requestStream, streamMode, locked, tail, toolCall, toolName, toolArgs, busy, templates, onTail, onSendWord, onFinish, onToolCall, onToolName, onToolArgs, onInsert }) {
+  const plainHint = requestStream
+    ? "Once mode. Type the reply, then Submit."
+    : "Non-streaming request. Type the reply, then Submit.";
   return (
     <Panel>
       <SectionTitle>Answer as the assistant</SectionTitle>
-      {streamMode === "once" ? (
-        <>
-          <p className="text-dim text-[13px]">Stream mode: <strong className="text-ink">once</strong> — type freely, then <em>Submit</em>. The whole message is delivered as a single chunk.</p>
-          <textarea
-            className="w-full bg-panel2 border border-line rounded-lg p-3 text-[15px] min-h-[120px] focus:outline-none focus:border-accent"
-            placeholder="Type the assistant reply…"
-            onChange={(e) => onTail(e.target.value)}
-          />
-          <div className="mt-2 space-y-2">
-            <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" className="w-4 h-4 accent-accent" checked={toolCall} onChange={(e) => onToolCall(e.target.checked)} /> this reply is a tool_call</label>
-            {toolCall && (
-              <>
-                <input className="input" placeholder="function name (e.g. get_weather)" value={toolName} onChange={(e) => onToolName(e.target.value)} />
-                <input className="input" placeholder='arguments JSON (e.g. {"city":"Paris"})' value={toolArgs} onChange={(e) => onToolArgs(e.target.value)} />
-              </>
-            )}
-          </div>
-          <button className="btn primary w-full" disabled={busy} onClick={() => onFinish(true)}>Submit</button>
-        </>
-      ) : (
+      {live ? (
         <>
           <p className="text-dim text-[13px] leading-relaxed">
-            Stream mode: <strong className="text-ink">word-chunk (live)</strong> — words stream to the client the moment you type a space/newline, and are then <em>locked</em> (already sent, can't be edited). <kbd className="px-1 rounded bg-panel2 text-[12px]">Shift+Enter</kbd> finishes.
+            Live word-chunk mode. Each word streams as it is typed and is then locked.{" "}
+            <kbd className="px-1 rounded bg-panel2 text-[12px]">Shift+Enter</kbd> to finish.
           </p>
           <div className="flex flex-col gap-2.5 mt-1">
             <div className="rounded-lg border border-dashed border-line bg-panel2/60 px-3 py-2 min-h-[36px] text-[14px] text-dim whitespace-pre-wrap break-words">
               {locked && <span className="bg-accent/15 text-accent rounded px-1">{locked}</span>}
-              {!locked && <span className="opacity-70">Locked stream appears here… (already sent — not editable)</span>}
+              {!locked && <span className="opacity-70">Sent text (locked)</span>}
             </div>
             <textarea
               className="w-full bg-panel2 border border-line rounded-lg p-3 text-[16px] leading-relaxed min-h-[110px] focus:outline-none focus:border-accent"
-              placeholder="Type the assistant reply — completed words are streamed immediately…"
+              placeholder="Type the assistant reply"
               value={tail}
               onChange={(e) => onTail(e.target.value)}
               onKeyDown={(e) => {
@@ -334,6 +349,25 @@ function AnswerForm({ streamMode, locked, tail, toolCall, toolName, toolArgs, bu
             </div>
           )}
         </>
+      ) : (
+        <>
+          <p className="text-dim text-[13px]">{plainHint}</p>
+          <textarea
+            className="w-full bg-panel2 border border-line rounded-lg p-3 text-[15px] min-h-[120px] focus:outline-none focus:border-accent"
+            placeholder="Type the assistant reply"
+            onChange={(e) => onTail(e.target.value)}
+          />
+          <div className="mt-2 space-y-2">
+            <label className="flex items-center gap-2 text-[14px]"><input type="checkbox" className="w-4 h-4 accent-accent" checked={toolCall} onChange={(e) => onToolCall(e.target.checked)} /> this reply is a tool_call</label>
+            {toolCall && (
+              <>
+                <input className="input" placeholder="function name (e.g. get_weather)" value={toolName} onChange={(e) => onToolName(e.target.value)} />
+                <input className="input" placeholder='arguments JSON (e.g. {"city":"Paris"})' value={toolArgs} onChange={(e) => onToolArgs(e.target.value)} />
+              </>
+            )}
+          </div>
+          <button className="btn primary w-full" disabled={busy} onClick={onFinish}>Submit</button>
+        </>
       )}
     </Panel>
   );
@@ -347,4 +381,36 @@ function SectionTitle({ children }) {
 }
 function fmtTime(epoch) {
   return new Date(epoch * 1000).toLocaleString();
+}
+
+/** Shown once a request is no longer pending: the delivered answer (or a note
+ * for terminal states without a response). */
+function DeliveredResponse({ detail, req }) {
+  const response = detail.response;
+  const tone =
+    req.state === "answered" || req.state === "streamed"
+      ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+      : "border-rose-500 bg-rose-500/10 text-rose-400";
+  return (
+    <Panel>
+      <SectionTitle>Response</SectionTitle>
+      <div className={`rounded-lg p-3 border mb-3 text-[13px] ${tone}`}>
+        This request is <strong>{req.status}</strong>
+        {req.answered_by ? ` (answered by ${req.answered_by})` : ""}. Only pending requests can be answered.
+      </div>
+      {response ? (
+        <>
+          <div className="text-[13px] text-dim mb-1">
+            finish_reason={response.choices?.[0]?.finish_reason ?? "—"} · usage=
+            {JSON.stringify(response.usage || {})}
+          </div>
+          <pre className="bg-black/40 border border-line rounded-lg p-2.5 text-[12px] overflow-auto whitespace-pre-wrap max-h-80">
+            {JSON.stringify(response, null, 2)}
+          </pre>
+        </>
+      ) : (
+        <p className="text-dim text-sm">No response envelope was recorded for this request.</p>
+      )}
+    </Panel>
+  );
 }
