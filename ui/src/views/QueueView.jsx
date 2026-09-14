@@ -132,6 +132,14 @@ export function QueueView({ refreshToken }) {
                     <Badge state={r.state} />
                     <span className="font-mono text-[12px] text-dim truncate">{r.id}</span>
                     {r.stream && <span className="text-[11px] text-amber-400 px-1 rounded bg-panel2">SSE</span>}
+                    {r.tool_names?.length > 0 && (
+                      <span
+                        className="text-[11px] text-accent px-1 rounded bg-panel2"
+                        title={`Tools: ${r.tool_names.join(", ")}`}
+                      >
+                        tools({r.tool_names.length})
+                      </span>
+                    )}
                     {r.has_images && <span className="text-[11px] text-amber-400 px-1 rounded bg-panel2">img</span>}
                   </div>
                   <div className="mt-1 text-sm text-ink line-clamp-2">{r.snippet || "—"}</div>

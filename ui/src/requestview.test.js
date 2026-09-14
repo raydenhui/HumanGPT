@@ -9,6 +9,7 @@ import {
   normalizeDetail,
   normalizeResponsesInput,
   normalizeTools,
+  toolDisplay,
   usesLiveWordChunk,
 } from "./requestview.js";
 import test from "node:test";
@@ -54,6 +55,39 @@ test("normalizeChatMessages filters non-objects and accepts missing", () => {
 test("normalizeTools is array-safe", () => {
   assert.deepEqual(normalizeTools(undefined), []);
   assert.deepEqual(normalizeTools([{ type: "function" }]), [{ type: "function" }]);
+});
+
+test("toolDisplay flattens the chat-completions nested shape", () => {
+  const d = toolDisplay({
+    type: "function",
+    function: {
+      name: "get_weather",
+      description: "Current weather",
+      parameters: { type: "object", properties: { city: { type: "string" } } },
+    },
+  });
+  assert.equal(d.name, "get_weather");
+  assert.equal(d.description, "Current weather");
+  assert.deepEqual(d.parameters.properties.city, { type: "string" });
+});
+
+test("toolDisplay flattens the Responses-API flat shape", () => {
+  const d = toolDisplay({
+    type: "function",
+    name: "get_time",
+    description: "Current time",
+    parameters: { type: "object" },
+  });
+  assert.equal(d.name, "get_time");
+  assert.equal(d.description, "Current time");
+  assert.deepEqual(d.parameters, { type: "object" });
+});
+
+test("toolDisplay is crash-safe for malformed tools", () => {
+  assert.equal(toolDisplay(null).name, "function");
+  assert.equal(toolDisplay("nope").name, "function");
+  assert.equal(toolDisplay({ function: null }).name, "function");
+  assert.deepEqual(toolDisplay({}).parameters, {});
 });
 
 test("normalizeDetail on the failing responses shape does not throw", () => {

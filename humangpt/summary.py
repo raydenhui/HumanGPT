@@ -111,10 +111,16 @@ def _tool_names(tools: Any) -> list[str]:
         return []
     names = []
     for tool in tools:
-        if isinstance(tool, dict):
-            fn = tool.get("function", {})
-            if isinstance(fn, dict) and fn.get("name"):
-                names.append(fn["name"])
+        if not isinstance(tool, dict):
+            continue
+        # Chat Completions nests the function under `function`; the Responses
+        # API sends the name flat. Accept both.
+        fn = tool.get("function")
+        if not isinstance(fn, dict):
+            fn = tool
+        name = fn.get("name")
+        if name:
+            names.append(name)
     return names
 
 

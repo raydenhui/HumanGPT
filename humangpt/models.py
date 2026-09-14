@@ -231,7 +231,10 @@ class ResponsesRequest(BaseModel):
     model: str = Field(..., min_length=1)
     input: str | list[Any] = Field(..., description="string or array of input items")
     instructions: str | None = None
-    tools: list[ToolDef] | None = None
+    # The Responses API sends function tools FLAT
+    # (`{type, name, description, parameters}`), unlike Chat Completions which
+    # nests the schema under `function`. Accept both shapes permissively.
+    tools: list[dict[str, Any]] | None = None
     tool_choice: str | dict[str, Any] | None = None
     max_output_tokens: int | None = None
     temperature: float | None = None

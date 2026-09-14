@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { api, operatorName } from "../api.js";
 import { lockOneWord } from "../wordlock.js";
-import { normalizeDetail, isAnswerable, usesLiveWordChunk, appendTemplate } from "../requestview.js";
+import { normalizeDetail, isAnswerable, usesLiveWordChunk, appendTemplate, toolDisplay } from "../requestview.js";
 
 function Part(part) {
   if (!part || typeof part !== "object") return null;
@@ -52,16 +52,16 @@ function roleBorder(role) {
   return { system: "border-accent", user: "border-emerald-500", assistant: "border-amber-500", tool: "border-rose-500" }[role] || "border-line";
 }
 
-function ToolDetail(tool) {
-  const fn = tool?.function || {};
+function ToolDetail({ tool }) {
+  const { name, description, parameters } = toolDisplay(tool);
   return (
     <details className="my-1">
       <summary className="cursor-pointer text-ink text-[14px]">
-        <span className="inline-block px-1.5 rounded bg-panel2 text-accent text-[12px]">{fn.name || "function"}</span>
-        {fn.description && <span className="text-dim text-[13px] ml-2">{fn.description.slice(0, 90)}</span>}
+        <span className="inline-block px-1.5 rounded bg-panel2 text-accent text-[12px]">{name}</span>
+        {description && <span className="text-dim text-[13px] ml-2">{description.slice(0, 90)}</span>}
       </summary>
       <pre className="bg-black/40 border border-line rounded-lg p-2 text-[12px] overflow-x-auto whitespace-pre-wrap mt-1">
-        {JSON.stringify(fn.parameters || {}, null, 2)}
+        {JSON.stringify(parameters, null, 2)}
       </pre>
     </details>
   );

@@ -91,3 +91,23 @@ class TestSummarizeResponses:
         s = summarize_responses(body)
         assert s["role_counts"]["user"] == 1
         assert s["role_counts"]["assistant"] == 1
+
+    def test_flat_function_tools(self):
+        """The Responses API sends function tools flat (no nested `function`)."""
+        body = {
+            "input": "hi",
+            "tools": [
+                {"type": "function", "name": "get_weather", "description": "w", "parameters": {}},
+                {"type": "function", "name": "get_time"},
+            ],
+        }
+        s = summarize_responses(body)
+        assert s["tool_names"] == ["get_weather", "get_time"]
+
+    def test_nested_function_tools_still_work(self):
+        body = {
+            "input": "hi",
+            "tools": [{"type": "function", "function": {"name": "get_weather"}}],
+        }
+        s = summarize_responses(body)
+        assert s["tool_names"] == ["get_weather"]

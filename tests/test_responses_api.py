@@ -57,6 +57,33 @@ async def test_responses_string_input(client, state):
     assert resp.json()["output"][0]["content"][0]["text"] == "string received"
 
 
+async def test_responses_accepts_flat_function_tools(client, state):
+    """The Responses API tool shape is flat; the request must be accepted and
+    the operator detail must expose the tool name for the Tools panel."""
+    body = {
+        "model": "human-gpt",
+        "input": "weather?",
+        "tools": [
+            {
+                "type": "function",
+                "name": "get_weather",
+                "description": "Current weather",
+                "parameters": {"type": "object", "properties": {"city": {"type": "string"}}},
+            }
+        ],
+    }
+    task = await parked_post(client, "/v1/responses", body)
+    row = await find_pending_row(state, endpoint="/v1/responses")
+    detail = (await client.get(f"/api/requests/{row.id}")).json()
+    assert detail["parsed"]["tool_names"] == ["get_weather"]
+    assert detail["body"]["tools"][0]["name"] == "get_weather"
+
+    await answer_via_web(client, row.id, text="sunny")
+    resp = await task
+    assert resp.status_code == 200
+    assert resp.json()["output"][0]["content"][0]["text"] == "sunny"
+
+
 async def test_responses_streaming_event_order(client, state):
     """Responses API SSE event order in once mode (single content delta)."""
     task = await parked_post(client, "/v1/responses", {**RESP_BODY, "stream": True, "stream_mode": "once"})

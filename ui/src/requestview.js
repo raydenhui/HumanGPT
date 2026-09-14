@@ -34,6 +34,27 @@ export function normalizeTools(tools) {
   return asArray(tools).filter((t) => t && typeof t === "object");
 }
 
+/**
+ * Flatten a tool definition into the fields the Tools panel renders.
+ *
+ * Chat Completions nests the function under `tool.function`
+ * (`{type, function: {name, description, parameters}}`), while the Responses
+ * API sends the function fields flat (`{type, name, description, parameters}`).
+ * Both shapes are accepted; anything missing falls back to safe defaults so a
+ * malformed tool can never crash the panel.
+ */
+export function toolDisplay(tool) {
+  if (!tool || typeof tool !== "object") {
+    return { name: "function", description: "", parameters: {} };
+  }
+  const fn = tool.function && typeof tool.function === "object" ? tool.function : tool;
+  return {
+    name: fn.name || "function",
+    description: typeof fn.description === "string" ? fn.description : "",
+    parameters: fn.parameters && typeof fn.parameters === "object" ? fn.parameters : {},
+  };
+}
+
 /** Everything the detail view needs, pre-computed and crash-safe. */
 export function normalizeDetail(detail) {
   const body = (detail && detail.body) || {};
