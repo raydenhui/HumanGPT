@@ -26,7 +26,13 @@ _INDEX = _DIST / "index.html"
 
 
 def _serve_spa() -> HTMLResponse:
-    return HTMLResponse(_INDEX.read_text(encoding="utf-8"))
+    """Serve the SPA shell. Always revalidated so a rebuilt bundle (new hashed
+    asset names) is picked up instead of a cached shell pointing at a stale
+    asset."""
+    return HTMLResponse(
+        _INDEX.read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @router.get("/", response_class=HTMLResponse)

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { api, operatorName } from "../api.js";
 import { lockOneWord } from "../wordlock.js";
-import { normalizeDetail, isAnswerable, usesLiveWordChunk } from "../requestview.js";
+import { normalizeDetail, isAnswerable, usesLiveWordChunk, appendTemplate } from "../requestview.js";
 
 function Part(part) {
   if (!part || typeof part !== "object") return null;
@@ -75,10 +75,9 @@ export function RequestDetail({ detail, onChanged }) {
   // the form is replaced by the delivered response (prevents repeat submits,
   // which the server rejects with `request_not_pending`).
   const isPending = isAnswerable(req);
-  // The live word-chunk form only makes sense for a *streaming* request whose
-  // effective mode is word-chunk. Non-streaming requests use the plain form
-  // (also used for tool-call answers).
-  const live = usesLiveWordChunk(req, streamMode);
+  // The live word-chunk form is selected by the effective stream mode (see
+  // usesLiveWordChunk); the plain submit form covers once mode.
+  const live = usesLiveWordChunk(streamMode);
 
   const [flash, setFlash] = useState(null);
   const [locked, setLocked] = useState([]); // deltas already streamed
@@ -132,9 +131,10 @@ export function RequestDetail({ detail, onChanged }) {
     setBusy(true);
     // Snapshot the full text BEFORE side effects so the submitted envelope
     // (usage/content) exactly matches what the client received as deltas.
-    // Drop any trailing whitespace the operator left in the buffer (they
-    // pressed Shift+Enter without intending a final space).
-    const cleanedTail = tail.replace(/\s+$/, "");
+    // Live mode drops any trailing whitespace the operator left in the buffer
+    // (they pressed Shift+Enter without intending a final space). Plain mode
+    // submits the text exactly as typed.
+    const cleanedTail = live ? tail.replace(/\s+$/, "") : tail;
     const fullText = lockedText + cleanedTail;
     // Stream the remaining (cleaned) tail as the final delta.
     if (live && cleanedTail !== "") {
@@ -171,7 +171,7 @@ export function RequestDetail({ detail, onChanged }) {
   function insertTemplate(name) {
     const t = (templates || []).find((x) => x.name === name);
     if (t) {
-      setTail(tail + (tail ? "\n" : "") + t.body);
+      setTail(appendTemplate(tail, t.body));
     }
   }
 
@@ -262,7 +262,7 @@ export function RequestDetail({ detail, onChanged }) {
           toolArgs={toolArgs}
           busy={busy}
           templates={templates}
-          onTail={handleTailChange}
+          onTail={live ? handleTailChange : setTail}
           onSendWord={sendWordNow}
           onFinish={finish}
           onToolCall={setToolCall}
@@ -338,16 +338,6 @@ function AnswerForm({ live, requestStream, streamMode, locked, tail, toolCall, t
               )}
             </div>
           </details>
-          {templates?.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3 items-center">
-              <span className="text-dim text-[13px]">Insert canned:</span>
-              {templates.map((t) => (
-                <button key={t.name} className="text-[12px] px-2 py-0.5 rounded-full border border-accent text-accent bg-transparent hover:bg-accent/10" onClick={() => onInsert(t.name)}>
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          )}
         </>
       ) : (
         <>
@@ -355,6 +345,7 @@ function AnswerForm({ live, requestStream, streamMode, locked, tail, toolCall, t
           <textarea
             className="w-full bg-panel2 border border-line rounded-lg p-3 text-[15px] min-h-[120px] focus:outline-none focus:border-accent"
             placeholder="Type the assistant reply"
+            value={tail}
             onChange={(e) => onTail(e.target.value)}
           />
           <div className="mt-2 space-y-2">
@@ -367,6 +358,7 @@ function AnswerForm({ live, requestStream, streamMode, locked, tail, toolCall, t
             )}
           </div>
           <button className="btn primary w-full" disabled={busy} onClick={onFinish}>Submit</button>
+          <TemplatePicker templates={templates} onInsert={onInsert} />
         </>
       )}
     </Panel>
@@ -381,6 +373,35 @@ function SectionTitle({ children }) {
 }
 function fmtTime(epoch) {
   return new Date(epoch * 1000).toLocaleString();
+}
+
+/**
+ * Dropdown that appends a saved canned response to the answer draft. Shown on
+ * the plain (non-streaming / once) form only — live word-chunk answers stream
+ * word-by-word as they are typed, so a pre-authored template does not fit that
+ * flow.
+ */
+function TemplatePicker({ templates, onInsert }) {
+  if (!templates || templates.length === 0) return null;
+  return (
+    <label className="flex items-center gap-2 text-[13px] mt-3">
+      <span className="text-dim">Insert template</span>
+      <select
+        className="input"
+        value=""
+        onChange={(e) => {
+          if (e.target.value) onInsert(e.target.value);
+        }}
+      >
+        <option value="">Select a template…</option>
+        {templates.map((t) => (
+          <option key={t.name} value={t.name}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 /** Shown once a request is no longer pending: the delivered answer (or a note

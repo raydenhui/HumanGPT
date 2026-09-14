@@ -21,7 +21,7 @@ lint:
 build-ui:
 	cd ui && npm install --no-audit --no-fund && npm run build
 
-build:
+build: build-ui
 	python -m pip install --upgrade build twine
 	python -m build
 	python -m twine check dist/*

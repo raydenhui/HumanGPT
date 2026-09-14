@@ -54,10 +54,25 @@ export function isAnswerable(req) {
 }
 
 /**
- * Whether the live word-chunk answer form applies. Only *streaming* requests
- * whose effective stream mode is word-chunk use it; non-streaming requests and
- * once-mode use the plain submit form.
+ * Whether the live word-chunk answer form applies. The operator's effective
+ * stream mode governs the answer form: word-chunk gets the live typing form,
+ * once gets the plain submit form. The client's `stream` flag is deliberately
+ * NOT part of this decision — a non-streaming request can still be answered
+ * word-by-word (the deltas are simply not delivered), and the queue's answer
+ * area must match whatever mode is configured in Settings.
  */
-export function usesLiveWordChunk(req, streamMode) {
-  return Boolean(req && req.stream) && streamMode === "word-chunk";
+export function usesLiveWordChunk(streamMode) {
+  return streamMode === "word-chunk";
+}
+
+/**
+ * Append a canned template body to the current draft. A newline is inserted
+ * between existing text and the template; an empty draft takes the body as-is.
+ */
+export function appendTemplate(current, body) {
+  const base = current || "";
+  const add = body || "";
+  if (!base) return add;
+  if (!add) return base;
+  return `${base}\n${add}`;
 }

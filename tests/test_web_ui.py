@@ -16,6 +16,66 @@ async def test_spa_index_served(client):
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
     assert "<div id=\"root\">" in r.text or "HumanGPT" in r.text
+    # shell must revalidate so a rebuilt bundle is picked up
+    assert "no-cache" in r.headers.get("cache-control", "")
+
+
+async def test_streaming_request_detail_supports_live_form(client, state):
+    """A streaming word-chunk request must expose what the live answer form
+    needs: `request.stream == true`, `stream_mode == word-chunk`, templates."""
+    await client.post("/api/templates", json={"name": "greeting", "body": "Hello"})
+    await parked_post(client, "/v1/chat/completions", {
+        "model": "human-gpt",
+        "stream": True,
+        "messages": [{"role": "user", "content": "stream me"}],
+    })
+    row = await find_pending_row(state)
+    d = (await client.get(f"/api/requests/{row.id}")).json()
+    assert d["request"]["stream"] is True
+    assert d["stream_mode"] == "word-chunk"
+    assert d["templates"] == [{"name": "greeting", "body": "Hello"}]
+
+
+async def test_non_streaming_request_detail_uses_plain_form(client, state):
+    await parked_post(client, "/v1/chat/completions", {
+        "model": "human-gpt",
+        "messages": [{"role": "user", "content": "plain"}],
+    })
+    row = await find_pending_row(state)
+    d = (await client.get(f"/api/requests/{row.id}")).json()
+    assert d["request"]["stream"] is False
+
+
+async def test_detail_stream_mode_follows_settings_change(client, state):
+    """A request without an explicit per-request mode mirrors the current global
+    default, so changing Settings switches the answer form."""
+    await parked_post(client, "/v1/chat/completions", {
+        "model": "human-gpt",
+        "stream": True,
+        "messages": [{"role": "user", "content": "mode"}],
+    })
+    row = await find_pending_row(state)
+    assert (await client.get(f"/api/requests/{row.id}")).json()["stream_mode"] == "word-chunk"
+
+    await client.post("/api/settings", json={"stream_mode": "once", "stream_chunk_delay_ms": 0})
+    assert (await client.get(f"/api/requests/{row.id}")).json()["stream_mode"] == "once"
+
+
+async def test_detail_stream_mode_respects_explicit_body_override(client, state):
+    """An explicit ``stream_mode`` on the request body wins over the global
+    default, so a client that pinned once-mode keeps the plain form."""
+    await parked_post(client, "/v1/chat/completions", {
+        "model": "human-gpt",
+        "stream": True,
+        "stream_mode": "once",
+        "messages": [{"role": "user", "content": "pinned once"}],
+    })
+    row = await find_pending_row(state)
+    assert (await client.get(f"/api/requests/{row.id}")).json()["stream_mode"] == "once"
+
+    await client.post("/api/settings", json={"stream_mode": "word-chunk", "stream_chunk_delay_ms": 0})
+    # Still once: the request body pinned it.
+    assert (await client.get(f"/api/requests/{row.id}")).json()["stream_mode"] == "once"
 
 
 async def test_api_meta(client, state):

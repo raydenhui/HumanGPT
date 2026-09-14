@@ -2,6 +2,7 @@
 // Run: node --test src/requestview.test.js
 
 import {
+  appendTemplate,
   asArray,
   isAnswerable,
   normalizeChatMessages,
@@ -84,13 +85,23 @@ test("isAnswerable only true for pending", () => {
   assert.equal(isAnswerable(null), false);
 });
 
-test("usesLiveWordChunk requires a streaming request AND word-chunk mode", () => {
-  // non-streaming request must NOT use the live form (the example-3 bug)
-  assert.equal(usesLiveWordChunk({ stream: false }, "word-chunk"), false);
-  assert.equal(usesLiveWordChunk({ stream: false }, "once"), false);
-  // streaming + word-chunk -> live
-  assert.equal(usesLiveWordChunk({ stream: true }, "word-chunk"), true);
-  // streaming + once -> plain form
-  assert.equal(usesLiveWordChunk({ stream: true }, "once"), false);
-  assert.equal(usesLiveWordChunk(null, "word-chunk"), false);
+test("usesLiveWordChunk follows the configured stream mode, not the request", () => {
+  // word-chunk -> live form, regardless of the client's stream flag
+  assert.equal(usesLiveWordChunk("word-chunk"), true);
+  // once -> plain form
+  assert.equal(usesLiveWordChunk("once"), false);
+  // unknown/missing mode falls back to plain
+  assert.equal(usesLiveWordChunk(undefined), false);
+});
+
+test("appendTemplate inserts into an empty draft", () => {
+  assert.equal(appendTemplate("", "Good job!"), "Good job!");
+  assert.equal(appendTemplate(null, "Good job!"), "Good job!");
+  assert.equal(appendTemplate("", ""), "");
+});
+
+test("appendTemplate appends with a newline separator", () => {
+  assert.equal(appendTemplate("existing", "template"), "existing\ntemplate");
+  assert.equal(appendTemplate("existing", ""), "existing");
+  assert.equal(appendTemplate("existing", null), "existing");
 });

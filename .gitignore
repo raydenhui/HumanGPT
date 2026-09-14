@@ -17,3 +17,5 @@ data/
 # node_modules is ignored)
 ui/node_modules/
 .humangpt-ui-build/
+# vite SSR scratch (local debug only)
+ui/.ssr-tmp/

@@ -19,43 +19,6 @@ tests.
 > It is an internal testing utility — do **not** run it on an untrusted network
 > or expose it publicly without a reverse proxy and authentication in front.
 
-```
-                    ┌─────────────────────────────────────────────────┐
-                    │                  HumanGPT server               │
-                    │                                                 │
- ┌────────────┐     │  ┌────────────────┐    ┌───────────────────┐   │     ┌──────────┐
- │  Client    │     │  │  /v1/* API     │    │   Operator SPA     │   │     │  Human   │
- │  (SDK)     │────▶│  │  chat + resp   │    │  React + Tailwind  │◀──▶│    │ operator │
- │ openai-py  │     │  └──────┬─────────┘    │  (queue + history)  │   │     └──────────┘
- └────────────┘     │         │ pending      └─────────┬─────────┘   │
-     ▲              │  ┌──────▼─────────┐               │ answers     │
-     │   SSE/JSON   │  │   ParkingLot   │◀──────────────┘             │
-     └──────────────│  │ (asyncio wait) │  ┌───────────────────┐       │
-                    │  └──────┬─────────┘  │   SQLite          │       │
-                    │         ▼            │ requests/responses│       │
-                    │  ┌───────────────┐   │ templates         │       │
-                    │  │  State machine│──▶│ (audit trail)     │       │
-                    │  └───────────────┘   └───────────────────┘       │
-                    └──────────────────────────────────────────────────┘
-```
-
-Flow:
-
-1. An SDK client calls the endpoint with `base_url` pointed at this server.
-2. The server validates the body (OpenAI-shaped errors otherwise), persists the
-   full request, assigns a request ID, and **parks** the client's HTTP request.
-3. The operator sees the pending request in the UI (full message chain, tool
-   schemas, generation params, images rendered inline for vision requests).
-4. The operator types the assistant reply. In **word-chunk** streaming mode each
-   completed word is streamed to the client as soon as a space/newline is typed,
-   and the sent prefix is then locked (no longer editable). **Shift+Enter**
-   finishes the response. The reply can optionally be flagged as a `tool_call`
-   (name + JSON arguments).
-5. The server releases the parked client request with the human's answer wrapped
-   in the correct OpenAI envelope (SSE when `stream:true`).
-6. Every interaction is logged with the full request/response/operator-audit
-   trail in SQLite.
-
 ---
 
 ## Install
@@ -75,7 +38,7 @@ From a checkout:
 ```bash
 pip install -e ".[dev]"     # dev extras: pytest + openai for the test suite
 make run                     # or: python -m humangpt
-make test                    # 217 Python tests + 17 JS unit tests
+make test                    # 220 Python tests + 19 JS unit tests
 ```
 
 ---
@@ -203,16 +166,22 @@ tabs in a top bar with a live pending-count badge:
 - **Queue** (`/`): a **master–detail layout**. The pending queue is a list on the
   left; the selected request's detail fills the main pane on the right. Each
   queued item shows status badge, model, snippet, tool tags, vision/SSE flags,
-  claim and age. Live updates stream over SSE (`/events`).
+  claim and age. Live updates stream over SSE (`/events`). A request detail is
+  deep-linkable via `/?request=<id>`.
 - **Request detail**: message chain, vision images rendered inline, tool
   schemas, generation parameters, raw-JSON toggle, and the answer box. The
-  word-chunk answer box shows the locked (already-streamed) text above the
-  editable draft tail, and **Shift+Enter** finishes. An in-progress draft is
-  saved per request in localStorage.
+  answer form follows the effective **stream mode** (an explicit per-request
+  `stream_mode` if the client sent one, otherwise the current Settings default):
+  **word-chunk** gets the live form (locked words, Shift+Enter to finish);
+  **once** gets the plain submit form, which offers the **Insert template**
+  dropdown. The client's `stream` flag does not affect which form is shown.
+  An in-progress draft is saved per request in localStorage.
 - **History** (`/history`): terminal-state requests with full transcript
   (request JSON, response envelope, finish_reason, usage, answered-by/at).
 - **Templates** (`/templates`): create / edit / delete canned responses and
-  copy a body. Insertable into the answer box.
+  copy a body. On a non-streaming request, a saved template can be inserted
+  directly from the answer form via the **Insert template** dropdown, so you
+  never need to open the Templates page to reuse one.
 - **Settings** (`/settings`): **Copy API URL** button, stream-mode default +
   chunk delay, and the **model editor** — add new model ids and set
   per-model `description` / `pricing` (merged with `models.json`, served by

@@ -34,7 +34,12 @@ export function App() {
       } catch (e) {
         return;
       }
-      if (data.type === "request-changed" || data.type === "templates-changed" || data.type === "models-changed") {
+      if (
+        data.type === "request-changed" ||
+        data.type === "templates-changed" ||
+        data.type === "models-changed" ||
+        data.type === "settings-changed"
+      ) {
         setRefreshToken((n) => n + 1);
       }
     });

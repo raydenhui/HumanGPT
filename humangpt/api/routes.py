@@ -99,7 +99,13 @@ async def request_detail(request_id: str, state: AppState = Depends(get_state)):
         "body": row.body_json,
         "parsed": row.parsed_json,
         "response": _response_json(state, row.id),
-        "stream_mode": _stream_default(state),
+        # The operator's answer form mirrors the effective stream mode: an
+        # explicit per-request ``stream_mode`` on the body is honored, otherwise
+        # the current global default applies (so a settings change is reflected
+        # on the next detail refresh without re-queueing).
+        "stream_mode": sanitize_stream_mode(
+            row.body_json.get("stream_mode"), _stream_default(state)
+        ),
         "templates": [{"name": t.name, "body": t.body} for t in state.db.list_templates()],
     }
 

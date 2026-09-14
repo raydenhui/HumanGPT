@@ -45,7 +45,23 @@ export function QueueView({ refreshToken }) {
   function select(id) {
     selectedRef.current = id;
     setSelectedId(id);
+    // Keep the URL in sync so a request detail is deep-linkable.
+    try {
+      const url = new URL(window.location.href);
+      if (id) url.searchParams.set("request", id);
+      else url.searchParams.delete("request");
+      window.history.replaceState({}, "", url);
+    } catch (e) {
+      /* ignore */
+    }
   }
+
+  // Deep link: /?request=<id> selects that request on load.
+  useEffect(() => {
+    const rid = new URLSearchParams(window.location.search).get("request");
+    if (rid) select(rid);
+    // eslint-disable-free: runs once on mount
+  }, []);
 
   function fetchDetail(id, { claim = false } = {}) {
     setDetailLoading(true);
